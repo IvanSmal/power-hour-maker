@@ -16,7 +16,7 @@ is installed system-wide. Run `setup.ps1 -DesktopShortcut` to also put a shortcu
 ## Using it
 
 **Songs**
-- Pick the length (60 / 100 / 120 minutes or anything custom) and how long each song plays.
+- Pick the length (30 / 60 / 100 / 120 minutes or anything custom) and how long each song plays.
 - Search YouTube, or paste a link from YouTube, Vimeo, Dailymotion, TikTok, Twitch clips and
   ~1800 other sites. A playlist link adds every video in it.
 - **Bulk add**: paste a list of `Artist - Song` lines and/or links; the top hit for each is downloaded.

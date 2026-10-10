@@ -11,7 +11,7 @@ user watches you work live; `open_app()` opens it.
 ## Workflow
 
 1. **Plan the playlist first.** A power hour is `minutes / seconds_per_song` songs (60 → 60 songs,
-   Centurion = 100). Pick ~10% extra so failures can be dropped. Good picks are well-known,
+   30 → a half hour, Centurion = 100). Pick ~10% extra so failures can be dropped. Good picks are well-known,
    high-energy, singable, varied in era and tempo, and fit the theme. No duplicates, no 10-minute
    prog epics unless asked. For a theme (Halloween, Christmas, 2000s, a specific artist...), mix
    obvious anthems with a few deep cuts.

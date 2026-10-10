@@ -25,7 +25,7 @@ INSTRUCTIONS = """Power Hour Maker builds power hour drinking-game videos: N son
 minute (configurable), with a drink signal at every change, an intro and an outro.
 
 Typical flow for "make me a <theme> power hour":
-1. create_project(name, minutes) - 60 minutes = 60 songs at 60 s each (100 = Centurion).
+1. create_project(name, minutes) - 60 minutes = 60 songs at 60 s each (30 = half hour, 100 = Centurion).
 2. Pick songs that fit the theme (well-known, singable, mixed eras/tempos, no duplicates). Add a
    few extra in case some fail. add_songs(["Artist - Title", ...], search_suffix="official video").
 3. Style it: apply_theme() if a preset fits (see options()), then update_settings() for custom
@@ -168,7 +168,7 @@ def status() -> dict:
 @mcp.tool()
 def create_project(name: str, minutes: int = 60, seconds_per_song: int = 60, theme: str | None = None) -> dict:
     """Create a new project and switch to it. minutes = total length (60 = classic power hour,
-    100 = Centurion, 120 = double); seconds_per_song = how long each song plays. Optional theme
+    30 = half hour, 100 = Centurion, 120 = double); seconds_per_song = how long each song plays. Optional theme
     preset id (see options())."""
     _post("/api/projects/new", {"name": name})
     _call("PATCH", "/api/project", {"settings": {"target_minutes": minutes, "clip_seconds": seconds_per_song}})
