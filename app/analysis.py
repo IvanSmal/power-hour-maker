@@ -35,11 +35,20 @@ def heat_peak(heatmap, duration):
         smooth.append(sum(v for _, v in win) / len(win))
     lo = max(10.0, duration * 0.05)
     hi = duration - max(5.0, duration * 0.03)
-    best = None
-    for i, (t, _) in enumerate(pts):
-        if lo <= t <= hi and (best is None or smooth[i] > smooth[best]):
-            best = i
-    return pts[best][0] if best is not None else None
+    cands = [i for i, (t, _) in enumerate(pts) if lo <= t <= hi]
+    if not cands:
+        return None
+    best = max(cands, key=lambda i: smooth[i])
+    # Viewers who just started watching keep the first stretch high for a while after the spike.
+    # An early pick no higher than the opening is that tail, not a highlight: prefer a later peak
+    # that's nearly as strong (genuine early peaks rise above the opening and are kept).
+    opening = max((smooth[i] for i, (t, _) in enumerate(pts) if t < lo), default=0.0)
+    late = [i for i in cands if pts[i][0] >= duration * 0.2]
+    if late and smooth[best] <= opening:
+        later = max(late, key=lambda i: smooth[i])
+        if smooth[later] >= 0.85 * smooth[best]:
+            best = later
+    return pts[best][0]
 
 
 def loudest_start(loudness, length, duration):
@@ -64,18 +73,31 @@ def clamp_start(start, length, duration):
     return max(0.0, min(float(start), max(0.0, duration - length - 0.05)))
 
 
+SILENCE_DB = -50.0
+
+
+def skip_silence(start, loudness, length, duration, limit=15):
+    """Move a start past dead air (e.g. a music video's silent opening), at most `limit` seconds."""
+    s = int(start)
+    end = min(len(loudness or []), s + limit)
+    while s < end and loudness[s] < SILENCE_DB:
+        s += 1
+    return clamp_start(max(float(start), s), length, duration)
+
+
 def suggestions(media, length):
     """All automatic start candidates for a clip of `length` seconds."""
     dur = media.get("duration") or 0
     out = {}
     if dur <= length + 0.05:
         return out
+    loud = media.get("loudness")
     peak = heat_peak(media.get("heatmap"), dur)
     if peak is not None:
-        out["heatmap"] = round(clamp_start(peak - length / 2, length, dur), 2)
-    if media.get("loudness"):
-        out["loudness"] = round(clamp_start(loudest_start(media["loudness"], length, dur), length, dur), 2)
-    out["default"] = round(clamp_start(dur * 0.25, length, dur), 2)
+        out["heatmap"] = round(skip_silence(clamp_start(peak - length / 2, length, dur), loud, length, dur), 2)
+    if loud:
+        out["loudness"] = round(clamp_start(loudest_start(loud, length, dur), length, dur), 2)
+    out["default"] = round(skip_silence(clamp_start(dur * 0.25, length, dur), loud, length, dur), 2)
     return out
 
 

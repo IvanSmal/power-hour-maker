@@ -71,11 +71,37 @@ def _load(path, size):
     return ImageFont.truetype(path, size) if path else ImageFont.load_default(size)
 
 
-def font(name, size, text=""):
+def _font_path(name, text=""):
     fm = font_map()
-    path = (_fallback_for(name, text) if text else None) or fm.get(name) or fm.get("Arial Bold") \
+    return (_fallback_for(name, text) if text else None) or fm.get(name) or fm.get("Arial Bold") \
         or next(iter(fm.values()), None)
-    return _load(path, max(6, int(size)))
+
+
+def font(name, size, text=""):
+    return _load(_font_path(name, text), max(6, int(size)))
+
+
+# Typographic characters some decorative fonts lack (they'd render as boxes) -> ASCII stand-ins.
+_ASCII = {"·": "-", "•": "-", "–": "-", "—": "-", "‘": "'", "’": "'", "“": '"', "”": '"', "…": "...", "×": "x"}
+
+
+@lru_cache(1024)
+def _missing(path, ch):
+    if not path:
+        return False
+    f = _load(path, 48)
+    notdef = f.getmask("")       # private-use code point: drawn with the font's "missing" glyph
+    m = f.getmask(ch)
+    return m.size == notdef.size and bytes(m) == bytes(notdef)
+
+
+def safe_text(name, text):
+    """`text` with the punctuation font `name` can't draw swapped for ASCII."""
+    text = str(text or "")
+    if all(ord(c) < 128 for c in text):
+        return text
+    path = _font_path(name, text)
+    return "".join(_ASCII[c] if c in _ASCII and _missing(path, c) else c for c in text)
 
 
 def rgb(c, default=(255, 255, 255)):
@@ -169,7 +195,8 @@ def counter(W, H, p):
         num = str(p.get("format") or "{n}").format(n=n, total=total, left=total - n)
     except (KeyError, IndexError, ValueError):
         num = str(n)
-    label = (p.get("label") or "").strip()
+    label = safe_text(p["font"], (p.get("label") or "").strip())
+    num = safe_text(p["font"], num)
     fn = font(p["font"], 92 * s, num)
     fl = font(p["font"], 30 * s, label)
     pad, gap, radius = 16 * s, 6 * s, 18 * s
@@ -195,7 +222,7 @@ def counter(W, H, p):
 
 def lower_third(W, H, p):
     s = H / 1080
-    title, artist = p.get("title") or "", p.get("artist") or ""
+    title, artist = safe_text(p["font"], p.get("title")), safe_text(p["font"], p.get("artist"))
     max_w = W * 0.62
     ft, lt, _ = fit(title, p["font"], 58 * s, max_w, 1)
     lt = lt or [""]
@@ -229,8 +256,8 @@ def lower_third(W, H, p):
 def big_number(W, H, p):
     s = H / 1080
     size = (420 if p.get("position") == "mc" else 170) * s * float(p.get("scale") or 1)
-    f = font(p["font"], size, str(p["text"]))
-    text = str(p["text"])
+    text = safe_text(p["font"], p["text"])
+    f = font(p["font"], size, text)
     stroke = max(2, int(size * 0.05))
     b = ink(text, f, stroke)
     m = int(size * 0.15)
@@ -246,7 +273,8 @@ def big_number(W, H, p):
 
 def card_text(W, H, p):
     s = H / 1080
-    title, sub = (p.get("title") or "").strip(), (p.get("subtitle") or "").strip()
+    title = safe_text(p["font"], (p.get("title") or "").strip())
+    sub = safe_text(p["font"], (p.get("subtitle") or "").strip())
     scale = float(p.get("scale") or 1)
     max_w = W * 0.86
     img = Image.new("RGBA", (W, H), (0, 0, 0, 0))

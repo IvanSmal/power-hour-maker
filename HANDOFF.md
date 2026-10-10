@@ -118,6 +118,18 @@ column now actually sticky (`.two-col > .col:last-child { align-self: stretch }`
 opened from the trimmer returns to it; "Delete downloads no project uses" now also deletes
 sections cut from local files (they're our copies in the cache; it used to skip anything `local`).
 
+Final test (user's request): made two full power hours through the MCP tools, output moved to the
+user's Videos folder (`F:\Videos`): "Horror Movie Power Hour" (60 songs from horror films, artist
+line = "artist · movie (year)") and "21st Century Punk Power Hour (Trivia)" (trivia mode, turntable
+video cover, answers "artist · year"). Fixes found on the way:
+- `analysis.heat_peak`: the heatmap stays high for 20-40 s after the start spike (viewers who just
+  started); an early pick no higher than the opening now yields to a later peak >= 85 % as strong
+  (genuine early peaks that rise above the opening are kept). Fixed ~6 of 120 songs (video intros).
+- `analysis.skip_silence`: automatic starts skip dead air (< -50 dBFS, max 15 s) - e.g. silent
+  video openings (blink-182 "The Rock Show" had 9 s).
+- `cards.safe_text`: punctuation a font can't draw (Stencil/Broadway/Cooper Black lack "·") is
+  swapped for ASCII instead of rendering as boxes (detected by comparing with the .notdef glyph).
+
 GitHub: private repo `IvanSmal/power-hour-maker` (gh CLI installed via winget, logged in as
 IvanSmal; repo-local git identity uses the GitHub no-reply address).
 
