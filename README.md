@@ -93,3 +93,8 @@ the server to `~/.claude.json` and Claude Desktop's config, with backups; `-Unin
 | `bin\`, `runtime\`, `.venv\` | Portable FFmpeg 8.1, Deno, uv, Python 3.12 |
 
 FFmpeg is pinned to the 8.1 series because 9.x's NVENC needs NVIDIA driver 610+.
+
+## License
+
+MIT - see [LICENSE](LICENSE). The tools `setup.ps1` downloads (Python packages, FFmpeg, yt-dlp,
+Deno) come with their own licenses, and downloaded videos belong to their owners.
