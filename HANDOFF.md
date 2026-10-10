@@ -130,8 +130,8 @@ video cover, answers "artist · year"). Fixes found on the way:
 - `cards.safe_text`: punctuation a font can't draw (Stencil/Broadway/Cooper Black lack "·") is
   swapped for ASCII instead of rendering as boxes (detected by comparing with the .notdef glyph).
 
-GitHub: private repo `IvanSmal/power-hour-maker` (gh CLI installed via winget, logged in as
-IvanSmal; repo-local git identity uses the GitHub no-reply address).
+GitHub: public repo `IvanSmal/power-hour-maker` (made public by the user; gh CLI installed via
+winget, logged in as IvanSmal; repo-local git identity uses the GitHub no-reply address).
 
 ## Immediate next steps
 
