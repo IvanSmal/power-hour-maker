@@ -40,6 +40,11 @@ user watches you work live; `open_app()` opens it.
 
 ## Tips
 
+- **Shot songs**: `set_song(n, shot=True)` - a "TAKE A SHOT!" card (shot glass, text, sound) plays before
+  it; style via `update_settings({"transition": {"shot": {...}}})`. A handful per hour (e.g. the big
+  singalongs, roughly every 10th song) is plenty.
+- **Bonus songs**: `set_song(n, bonus=True)` - a secret extra after the outro ("BONUS 1", ...), not
+  counted in the song total; add them with add_songs first. `bonus: {gap, label}` in update_settings.
 - **Trivia / guess-the-song** ("music quiz", "name that tune"): `update_settings({"overlays": {"trivia":
   {"enabled": true}}})`. Each song plays sound-only behind a cover for `audio_seconds` (20), then the
   video without its title for `video_seconds` (20), then the answer appears. Cover `bg.type` "blur"

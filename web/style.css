@@ -166,7 +166,7 @@ output { font-variant-numeric: tabular-nums; min-width: 44px; color: var(--gold-
 .list-title { font-weight: 700; font-size: 15px; margin-right: 6px; }
 .clip-list { display: flex; flex-direction: column; gap: 6px; }
 .clip {
-  display: grid; grid-template-columns: 22px 44px 112px minmax(160px, 1fr) 250px 150px 130px 70px;
+  display: grid; grid-template-columns: 22px 44px 112px minmax(160px, 1fr) 250px 150px 130px 156px;
   align-items: center; gap: 12px; padding: 7px 10px; border-radius: 10px;
   background: var(--panel-2); border: 1px solid var(--line); cursor: pointer; transition: border-color .12s, background .12s;
 }
@@ -321,7 +321,7 @@ output { font-variant-numeric: tabular-nums; min-width: 44px; color: var(--gold-
 ::-webkit-scrollbar-track { background: transparent; }
 
 @media (max-width: 1250px) {
-  .clip { grid-template-columns: 22px 40px 96px minmax(140px, 1fr) 180px 130px 110px 64px; }
+  .clip { grid-template-columns: 22px 40px 96px minmax(140px, 1fr) 180px 130px 110px 150px; }
   .clip canvas.mini { width: 180px; }
   .clip .thumb { width: 96px; }
   .stats { display: none; }
@@ -353,3 +353,15 @@ output { font-variant-numeric: tabular-nums; min-width: 44px; color: var(--gold-
 .trivia-bar .tb-sound { background: #3b1c8c; color: #fff; }
 .trivia-bar .tb-video { background: #1d4f7a; color: #fff; }
 .trivia-bar .tb-answer { background: var(--gold); color: #1a1200; }
+
+/* shot songs / bonus songs in the playlist */
+.clip .acts .flag { opacity: .28; filter: grayscale(1); }
+.clip:hover .acts .flag { opacity: .7; }
+.clip .acts .flag.on { opacity: 1; filter: none; background: rgba(255,196,0,.16); }
+.clip .num.bonus { color: var(--cyan); font-size: 17px; }
+.clip.is-shot .num::after { content: '🥃'; display: block; font-size: 13px; line-height: 1.1; }
+.clip.is-bonus { background: rgba(56,214,255,.05); }
+.bonus-divider { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 10px; padding: 9px 12px;
+  border: 1px dashed rgba(56,214,255,.45); border-radius: 10px; background: rgba(56,214,255,.06); }
+.bonus-divider b { color: var(--cyan); margin-right: 4px; }
+.bonus-divider .bonus-label { width: 110px; }

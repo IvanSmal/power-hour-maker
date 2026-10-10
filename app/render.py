@@ -138,7 +138,7 @@ class PlanBuilder:
     def context(self):
         """Values for {count} / {minutes} / {name} placeholders in card text."""
         if self.ctx is None:
-            ready = self.ready_clips()
+            ready = [c for c in self.ready_clips() if not c.get("bonus")]
             secs = 0.0
             for c in ready:
                 d = float((self.media.get(c["media_key"]) or {}).get("duration") or 0)
@@ -163,7 +163,8 @@ class PlanBuilder:
         return [c for c in self.p["clips"] if c.get("media_key") and self.media.is_ready(c["media_key"])]
 
     # --- segment recipes ------------------------------------------------------------------------
-    def clip_segment(self, c, i, total):
+    def clip_segment(self, c, i, total, bonus=None):
+        """Recipe for one song; `bonus` is the label (e.g. "BONUS") for songs played after the outro."""
         fps, L, ov = self.fps, self.L, self.ov
         m = self.media.get(c["media_key"], heavy=True)
         path = self.media.file_path(m)
@@ -183,15 +184,20 @@ class PlanBuilder:
         overlays = []
         cnt = ov.get("counter") or {}
         if cnt.get("enabled"):
-            overlays.append({"type": "counter", "n": n, "total": total, "label": cnt.get("label", ""),
-                             "format": cnt.get("format") or "{n}", "position": cnt.get("position") or "tr",
+            overlays.append({"type": "counter", "n": n, "total": total,
+                             "label": bonus if bonus else cnt.get("label", ""),
+                             "format": "{n}" if bonus else (cnt.get("format") or "{n}"),
+                             "position": cnt.get("position") or "tr",
                              "scale": cnt.get("scale") or 1, "badge_text": cnt.get("badge_text"), **self.style})
         tt = ov.get("title") or {}
         trivia = self.trivia_phases(dur)
         if trivia:
             audio_end, reveal_at = trivia
             tv = ov.get("trivia") or {}
-            text, sub = fmt_text(tv.get("text"), n=n, total=total), fmt_text(tv.get("subtext"), n=n, total=total)
+            sub_t, n_t = tv.get("subtext") or "", n
+            if bonus:                                   # "#{n}" -> "BONUS 1"
+                sub_t, n_t = sub_t.replace("#{n}", "{n}"), f"{bonus} {n}"
+            text, sub = fmt_text(tv.get("text"), n=n_t, total=total), fmt_text(sub_t, n=n_t, total=total)
             if audio_end and (text or sub):
                 overlays.append({"type": "card_text", "title": text, "subtitle": sub, "font": self.style["font"],
                                  "color": self.style["text_color"], "sub_color": self.style["accent"], "scale": 0.75,
@@ -219,7 +225,9 @@ class PlanBuilder:
                                  **self.style})
         spec = {
             "kind": "clip", "n": n, "_id": c.get("id"), "_src": src, "_title": title, "_artist": artist,
-            "label": f"{n}. {title}" + (f" - {artist}" if artist else ""),
+            "_tag": f"B{n:02d}" if bonus else f"{n:03d}", "_bonus": bool(bonus),
+            # bonus songs stay a secret in the chapter list
+            "label": f"{bonus.title()} {n}" if bonus else f"{n}. {title}" + (f" - {artist}" if artist else ""),
             "dur": dur,
             "video": {"type": "file", "path": str(path), "sig": file_sig(path), "ss": round(ss, 3), "loop": loop,
                       "src_dur": vdur, "fill": self.st.get("fill") or "blur", "src_w": m.get("width"),
@@ -322,33 +330,53 @@ class PlanBuilder:
                                  "beep": self.sound("tick", 0.9) if card.get("countdown_beeps") else None}
         return spec
 
-    def stinger_segment(self, done, total):
-        s = self.tr.get("stinger") or {}
+    def _flash_card(self, cfg, kind, ctx, c1, c2, glass=False):
+        """A short full-screen card (stinger, shot): a colour gradient or a clip with big text on top."""
         fps = self.fps
-        dur = snap(max(0.5, float(s.get("duration") or 2.5)), fps)
-        key = s.get("media_key")
+        dur = snap(max(0.5, float(cfg.get("duration") or 2.5)), fps)
+        key = cfg.get("media_key")
         if key and self.media.is_ready(key):
             m = self.media.get(key)
             path = self.media.file_path(m)
             vdur = float(m.get("duration") or 0)
-            ss = max(0.0, min(float(s.get("start") or 0), max(0.0, vdur - 0.5)))
+            ss = max(0.0, min(float(cfg.get("start") or 0), max(0.0, vdur - 0.5)))
             dur = max(0.5, min(dur, floor_snap(vdur - ss - 0.05, fps)))
             video = {"type": "file", "path": str(path), "sig": file_sig(path), "ss": round(ss, 3), "loop": False,
                      "fill": self.st.get("fill") or "blur", "src_w": m.get("width"), "src_h": m.get("height")}
             audio = {"type": "src" if m.get("has_audio") else "none"}
+            glass = False                                # the clip is the graphic
         else:
-            video = {"type": "gradient", "c1": s.get("c1") or "#ff2e63", "c2": s.get("c2") or "#7b2ff7",
+            video = {"type": "gradient", "c1": cfg.get("c1") or c1, "c2": cfg.get("c2") or c2,
                      "style": "radial", "speed": 0.06}
             audio = {"type": "none"}
-        ctx = {"n": done, "left": total - done, "total": total, "next": done + 1}
-        title, sub = fmt_text(s.get("text"), **ctx), fmt_text(s.get("subtext"), **ctx)
+        title, sub = fmt_text(cfg.get("text"), **ctx), fmt_text(cfg.get("subtext"), **ctx)
+        color = cfg.get("text_color") or "#ffffff"
         overlays = []
+        if glass:
+            overlays.append({"type": "shot_glass", "scale": 1.45, "y": 0.05, "start": 0, "end": dur, "fade_in": 0.2,
+                             "fade_out": 0})
         if title or sub:
             overlays.append({"type": "card_text", "title": title, "subtitle": sub, "font": self.style["font"],
-                             "color": s.get("text_color") or "#ffffff", "sub_color": s.get("text_color") or "#ffffff",
-                             "scale": 1.15, "start": 0, "end": dur, "fade_in": 0, "fade_out": 0})
-        return {"kind": "stinger", "label": "Stinger", "dur": dur, "video": video, "audio": audio,
+                             "color": color, "sub_color": color, "scale": 1.0 if glass else 1.15,
+                             "y_offset": 0.2 if glass else 0, "start": 0, "end": dur, "fade_in": 0, "fade_out": 0})
+        return {"kind": kind, "label": kind.title(), "dur": dur, "video": video, "audio": audio,
                 "normalize": False, "overlays": overlays, "progress": None, "sfx": [],
+                "fade_in": 0, "fade_out": 0, "dim": 0}
+
+    def stinger_segment(self, done, total):
+        ctx = {"n": done, "left": total - done, "total": total, "next": done + 1}
+        return self._flash_card(self.tr.get("stinger") or {}, "stinger", ctx, "#ff2e63", "#7b2ff7")
+
+    def shot_segment(self, n, total):
+        """The "take a shot" card before song `n` (a number, or e.g. "BONUS 1")."""
+        cfg = self.tr.get("shot") or {}
+        return self._flash_card(cfg, "shot", {"n": n, "total": total}, "#7a2a00", "#140400",
+                                glass=cfg.get("glass", True))
+
+    def gap_segment(self, dur):
+        """Black silence between the outro and the bonus songs, like a hidden track on a CD."""
+        return {"kind": "gap", "label": "Gap", "dur": snap(dur, self.fps), "video": {"type": "color", "c1": "#000000"},
+                "audio": {"type": "none"}, "normalize": False, "overlays": [], "progress": None, "sfx": [],
                 "fade_in": 0, "fade_out": 0, "dim": 0}
 
     # --- joins -------------------------------------------------------------------------------
@@ -372,14 +400,21 @@ class PlanBuilder:
     # --- assembling -------------------------------------------------------------------------------
     def build(self, clips=None, intro=True, outro=True, stinger=True):
         clips = self.ready_clips() if clips is None else clips
-        total = len(clips)
-        clip_specs = [self.clip_segment(c, i, total) for i, c in enumerate(clips)]
+        main = [c for c in clips if not c.get("bonus")]
+        extra = [c for c in clips if c.get("bonus")]
+        total = len(main)
+        bcfg = self.p.get("bonus") or {}
+        blabel = (bcfg.get("label") or "").strip() or "BONUS"
+        clip_specs = [self.clip_segment(c, i, total) for i, c in enumerate(main)]
+        bonus_specs = [self.clip_segment(c, i, len(extra), bonus=blabel) for i, c in enumerate(extra)]
         self.ctx = {"count": total, "minutes": round(sum(s["dur"] for s in clip_specs) / 60),
                     "name": self.p.get("name", "")}
         tr = self.tr
-        main_sound = self.sound(tr.get("sfx"), tr.get("sfx_volume") or 0.8)
+        vol = tr.get("sfx_volume") or 0.8
+        main_sound = self.sound(tr.get("sfx"), vol)
         use_stinger = stinger and (tr.get("stinger") or {}).get("enabled")
-        sting_sound = self.sound((tr.get("stinger") or {}).get("sfx"), tr.get("sfx_volume") or 0.8)
+        sting_sound = self.sound((tr.get("stinger") or {}).get("sfx"), vol)
+        shot_sound = self.sound((tr.get("shot") or {}).get("sfx"), vol)
 
         segs, joins = [], []
 
@@ -388,24 +423,41 @@ class PlanBuilder:
                 joins.append(join)
             segs.append(spec)
 
+        def place(spec, clip, n, n_total, into, sound, stinger_card=None):
+            """Add a song, led by its shot card (or the stinger). `into(sound)` makes the join from
+            whatever came before; the lead-in card carries the change's sound instead of the song."""
+            lead, lead_sound = spec, sound
+            if clip.get("shot"):
+                lead, lead_sound = self.shot_segment(n, n_total), shot_sound
+            elif stinger_card is not None:
+                lead, lead_sound = stinger_card, sting_sound
+            if segs:
+                add(lead, into(lead_sound))
+            else:                                        # very first thing in the video
+                if lead_sound:
+                    lead["sfx"].append(lead_sound | {"at": 0, "offset": 0})
+                add(lead, None)
+            if lead is not spec:
+                add(spec, self.main_join(len(joins), None))
+
         if intro and self.p["intro"].get("enabled"):
             add(self.card_segment("intro"), None)
         for i, spec in enumerate(clip_specs):
             if i == 0:
-                first = main_sound if tr.get("sfx_first") else None
-                if segs:
-                    add(spec, self.card_join("intro", first))
-                else:
-                    if first:
-                        spec["sfx"].append(first | {"at": 0, "offset": 0})
-                    add(spec, None)
-            elif use_stinger:
-                add(self.stinger_segment(i, total), self.main_join(len(joins), sting_sound))
-                add(spec, self.main_join(len(joins), None))
+                place(spec, main[i], 1, total, lambda snd: self.card_join("intro", snd),
+                      main_sound if tr.get("sfx_first") else None)
             else:
-                add(spec, self.main_join(len(joins), main_sound))
+                place(spec, main[i], i + 1, total, lambda snd: self.main_join(len(joins), snd), main_sound,
+                      self.stinger_segment(i, total) if use_stinger else None)
         if outro and self.p["outro"].get("enabled"):
             add(self.card_segment("outro"), self.card_join("outro", None) if segs else None)
+        if bonus_specs:
+            gap = float(bcfg.get("gap") or 0)
+            if gap > 0 and segs:
+                add(self.gap_segment(gap), {"effect": "fade", "d": snap(1.0, self.fps), "sfx": None})
+            for k, spec in enumerate(bonus_specs):
+                place(spec, extra[k], f"{blabel} {k + 1}", len(extra),
+                      lambda snd: self.main_join(len(joins), snd), main_sound)
         return self.finalize(segs, joins)
 
     def single(self, spec):
@@ -438,7 +490,7 @@ class PlanBuilder:
             starts.append(max(0.0, t - s["head"]))
             t += s["dur"] - s["head"]
         chapters = [{"start": round(starts[k], 3), "title": s["label"], "kind": s["kind"], "id": s.get("_id")}
-                    for k, s in enumerate(segs) if s["kind"] != "stinger"]
+                    for k, s in enumerate(segs) if s["kind"] in ("intro", "clip", "outro")]
         for i, c in enumerate(chapters):
             c["end"] = chapters[i + 1]["start"] if i + 1 < len(chapters) else round(t, 3)
         return {"W": self.W, "H": self.H, "fps": fps, "encoder": self.encoder, "quality": self.quality,

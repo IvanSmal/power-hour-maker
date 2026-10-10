@@ -69,9 +69,10 @@
   <div class="panel list-panel">
     <div class="list-toolbar">
       <span class="list-title">Playlist</span>
-      <span class="muted small" id="list-hint">Drag ⋮⋮ to reorder · click a row to pick the minute</span>
+      <span class="muted small" id="list-hint">Drag ⋮⋮ to reorder · click a row to pick the minute · 🥃 shot song · 🎁 bonus song</span>
       <span class="spacer"></span>
       <button class="btn small" id="btn-shuffle">🔀 Shuffle</button>
+      <button class="btn small" id="btn-shots" title="Pick shot songs: every Nth song, a few at random, or none">🥃 Shot songs</button>
       <button class="btn small" id="btn-reset-starts" title="Forget manual start points and use Most-Replayed / loudest again">↺ Auto start points</button>
       <button class="btn small" id="btn-retry-all">⟳ Retry failed</button>
       <button class="btn small gold hidden" id="btn-auto-sections" title="Long videos: use the suggested part of each">✂ Suggested sections</button>
@@ -131,12 +132,28 @@
           <label>Custom clip</label><div class="mediapick" data-mediapick="transition.stinger.media_key" data-start="transition.stinger.start"></div>
         </div>
       </div>
+      <div class="panel">
+        <div class="panel-head"><h3>🥃 Shot card</h3><span class="muted small" id="shot-count"></span></div>
+        <p class="muted small">Plays before every song marked 🥃 in the playlist (instead of the stinger). Use <code>{n}</code> for the song's number.</p>
+        <div class="form-grid">
+          <label>Big text</label><input data-bind="transition.shot.text">
+          <label>Small text</label><input data-bind="transition.shot.subtext">
+          <label>Duration</label><div class="inline"><input type="range" min="1" max="10" step="0.5" data-bind="transition.shot.duration" data-type="number"><output data-for="transition.shot.duration" data-suffix=" s"></output></div>
+          <label>Colors</label><div class="inline"><input type="color" data-bind="transition.shot.c1"><input type="color" data-bind="transition.shot.c2"><span class="muted small">text</span><input type="color" data-bind="transition.shot.text_color"></div>
+          <label>Graphic</label><label class="toggle"><input type="checkbox" data-bind="transition.shot.glass"><span></span>Shot glass</label>
+          <label>Sound</label><div class="inline"><select data-bind="transition.shot.sfx" data-options="sounds"></select><button class="btn small" data-play-sound="transition.shot.sfx">▶</button></div>
+          <label>Custom clip</label><div class="mediapick" data-mediapick="transition.shot.media_key" data-start="transition.shot.start"></div>
+        </div>
+      </div>
     </div>
     <div class="col">
       <div class="panel sticky">
         <h3>Preview</h3>
         <div class="preview-box"><video id="trans-video" class="preview-video hidden" controls></video><img id="stinger-frame" class="preview-img hidden" alt=""><div class="preview-empty" id="trans-empty">Preview a transition between your first two songs.</div></div>
         <div class="field-row"><button class="btn gold" id="btn-preview-transition">▶ Preview transition</button><button class="btn" id="btn-preview-stinger" data-show="transition.stinger.enabled">▶ Preview stinger</button></div>
+        <h3 class="mt">Shot card</h3>
+        <div class="preview-box"><video id="shot-video" class="preview-video hidden" controls></video><img id="shot-frame" class="preview-img" alt=""></div>
+        <div class="field-row"><button class="btn" id="btn-preview-shot">▶ Preview shot card</button></div>
       </div>
     </div>
   </div>

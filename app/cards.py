@@ -305,7 +305,46 @@ def card_text(W, H, p):
     return _crop(img, 2)
 
 
-RENDERERS = {"counter": counter, "lower_third": lower_third, "big_number": big_number, "card_text": card_text}
+def shot_glass(W, H, p):
+    """A shot glass with liquid in it, centred near the top of the frame (the 'take a shot' card)."""
+    s = H / 1080 * float(p.get("scale") or 1)
+    k = 4                                            # drawn 4x larger, then scaled down for smooth edges
+    w, h = int(230 * s) * k, int(300 * s) * k
+    img = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    lw = max(4, int(w * 0.035))
+    top, bot = h * 0.07, h * 0.97
+    xl_t, xr_t, xl_b, xr_b = w * 0.03, w * 0.97, w * 0.16, w * 0.84
+
+    def side(y, right=False):                        # x of the glass wall at height y
+        t = (y - top) / (bot - top)
+        return (xr_t + (xr_b - xr_t) * t) if right else (xl_t + (xl_b - xl_t) * t)
+
+    body = [(xl_t, top), (xr_t, top), (xr_b, bot), (xl_b, bot)]
+    d.polygon(body, fill=(255, 255, 255, 45))
+    floor = bot - h * 0.17                           # thick glass base below the liquid
+    level = floor - (floor - top) * 0.6
+    pad = lw * 1.3
+    liquid = rgb(p.get("liquid") or "#ffb300", (255, 179, 0))
+    d.polygon([(side(level) + pad, level), (side(level, True) - pad, level),
+               (side(floor, True) - pad, floor), (side(floor) + pad, floor)], fill=liquid + (240,))
+    foam = tuple(min(255, int(c + (255 - c) * 0.45)) for c in liquid)
+    d.ellipse((side(level) + pad, level - h * 0.03, side(level, True) - pad, level + h * 0.03), fill=foam + (255,))
+    d.polygon([(side(floor), floor), (side(floor, True), floor), (xr_b, bot), (xl_b, bot)], fill=(255, 255, 255, 120))
+    d.line(body + [body[0]], fill=(255, 255, 255, 235), width=lw, joint="curve")
+    d.ellipse((xl_t, top - h * 0.045, xr_t, top + h * 0.045), outline=(255, 255, 255, 235), width=lw)
+    y0, y1 = top + h * 0.14, floor - h * 0.06
+    d.line([(side(y0) + lw * 2.4, y0), (side(y1) + lw * 2.4, y1)], fill=(255, 255, 255, 120), width=int(lw * 1.5))
+    glass = img.resize((w // k, h // k), Image.LANCZOS)
+    m = int(24 * s)                                  # room for the shadow
+    out = Image.new("RGBA", (glass.width + 2 * m, glass.height + 2 * m), (0, 0, 0, 0))
+    out.alpha_composite(glass, (m, m))
+    out = _shadow(out, max(3, int(12 * s)), 160, (0, int(6 * s)))
+    return out, (W - out.width) // 2, int(H * float(p.get("y") or 0.08))
+
+
+RENDERERS = {"counter": counter, "lower_third": lower_third, "big_number": big_number, "card_text": card_text,
+             "shot_glass": shot_glass}
 
 
 def render(ov, W, H):

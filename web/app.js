@@ -423,12 +423,18 @@ function renderStats() {
     [`${sm.ready}/${sm.target}`, 'songs', sm.ready >= sm.target ? 'good' : ''],
     [fmtTime(sm.duration), 'runtime', ''],
   ];
+  if (sm.bonus) pills.push([`+${sm.bonus}`, 'bonus', '']);
+  if (sm.shots) pills.push([sm.shots, sm.shots > 1 ? 'shots' : 'shot', '']);
   if (sm.pending) pills.push([sm.pending, 'downloading', 'busy']);
   if (sm.error) pills.push([sm.error, 'failed', 'bad']);
   $('#stats').replaceChildren(...pills.map(([b, l, c]) => h('div', { class: 'stat-pill ' + c }, h('b', {}, b), h('span', { class: 'muted small' }, l))));
   $('#fill-bar').style.width = Math.min(100, (sm.ready / sm.target) * 100) + '%';
-  const extra = sm.total > sm.ready ? ` · ${sm.total - sm.ready} more in the list` : '';
+  const others = sm.total - sm.ready - (sm.bonus_ready || 0);
+  const extra = (others > 0 ? ` · ${others} more in the list` : '') + (sm.bonus ? ` · ${sm.bonus} bonus` : '')
+    + (sm.shots ? ` · ${sm.shots} shot song${sm.shots > 1 ? 's' : ''}` : '');
   $('#fill-text').textContent = `${sm.ready} of ${sm.target} songs ready${extra} · video runtime ${fmtTime(sm.duration)}`;
+  $('#shot-count').textContent = sm.shots ? `${sm.shots} shot song${sm.shots > 1 ? 's' : ''} in the playlist`
+    : 'no shot songs yet - mark them with 🥃';
 }
 
 // ============================================================================================
@@ -438,6 +444,41 @@ const rows = new Map();
 let dragId = null;
 
 function clipById(id) { return S.project?.clips.find(c => c.id === id); }
+
+// "12" for main songs, "B1" for bonus songs (they're numbered separately, after the outro)
+function clipNumber(c) {
+  const group = S.project.clips.filter(x => !!x.bonus === !!c.bonus);
+  return (c.bonus ? 'B' : '') + (group.indexOf(c) + 1);
+}
+
+// Mark songs as shot / bonus songs. Songs that change group go to the end of their new group,
+// main songs always come first - the same rules the backend applies.
+function setFlags(ids, fields) {
+  const moved = [];
+  for (const c of S.project.clips) {
+    if (!ids.includes(c.id)) continue;
+    if ('bonus' in fields && !!c.bonus !== fields.bonus) moved.push(c);
+    Object.assign(c, fields);
+  }
+  const all = [...S.project.clips.filter(c => !moved.includes(c)), ...moved];
+  S.project.clips = [...all.filter(c => !c.bonus), ...all.filter(c => c.bonus)];
+  renderClips();
+  return api.post('/api/clips/flags', { ids, ...fields }).catch(e => toast(e.message, 'err')).then(poll);
+}
+
+const bonusDivider = h('div', { class: 'bonus-divider' },
+  h('b', {}, '🎁 Bonus songs'),
+  h('span', { class: 'muted small' }, 'secret extras after the end card, after'),
+  h('input', { type: 'number', class: 'num', min: 0, max: 30, step: 1, 'data-bind': 'bonus.gap', 'data-type': 'number', title: 'Seconds of black between the end card and the first bonus song' }),
+  h('span', { class: 'muted small' }, 's of black · counter says'),
+  h('input', { class: 'bonus-label', 'data-bind': 'bonus.label', placeholder: 'BONUS', maxlength: 16, title: 'Shown on the drink counter: BONUS 1, BONUS 2, ...' }),
+);
+bonusDivider.addEventListener('dragover', e => { if (dragId) e.preventDefault(); });
+bonusDivider.addEventListener('drop', e => {          // dropped on the header: becomes the first bonus song
+  e.preventDefault();
+  const first = S.project.clips.find(c => c.bonus);
+  if (dragId && first && first.id !== dragId) moveClip(dragId, first.id, false);
+});
 function clipStatus(c) {
   if (c.resolve === 'searching') return { kind: 'busy', text: 'Searching…' };
   if (c.resolve === 'error') return { kind: 'err', text: 'Not found', err: c.error };
@@ -462,13 +503,23 @@ function renderClips() {
   $('#empty-list').classList.toggle('hidden', clips.length > 0);
   const target = S.summary?.target || 60;
   const seen = new Set();
-  clips.forEach((c, i) => {
+  const els = [];
+  const place = (c, i, bonus) => {
     seen.add(c.id);
     let row = rows.get(c.id);
     if (!row) { row = makeRow(c.id); rows.set(c.id, row); }
-    updateRow(row, c, i, target);
-    if (list.children[i] !== row.el) list.insertBefore(row.el, list.children[i] || null);
-  });
+    updateRow(row, c, i, target, bonus);
+    els.push(row.el);
+  };
+  const main = clips.filter(c => !c.bonus), extra = clips.filter(c => c.bonus);
+  main.forEach((c, i) => place(c, i, false));
+  if (extra.length) {
+    if (!bonusDivider.dataset.ready) { bonusDivider.dataset.ready = '1'; bindAll(bonusDivider); }
+    els.push(bonusDivider);
+  }
+  extra.forEach((c, i) => place(c, i, true));
+  els.forEach((el, k) => { if (list.children[k] !== el) list.insertBefore(el, list.children[k] || null); });
+  if (!extra.length) bonusDivider.remove();
   for (const [id, row] of rows) if (!seen.has(id)) { row.el.remove(); rows.delete(id); }
   $('#btn-auto-sections').classList.toggle('hidden', !clips.some(c => clipStatus(c).kind === 'long'));
 }
@@ -489,7 +540,14 @@ function makeRow(id) {
   };
   const retry = h('button', { class: 'btn small ghost retry', title: 'Retry', onclick: e => { e.stopPropagation(); api.post('/api/clips/retry', { ids: [id] }).then(poll); } }, '⟳');
   const del = h('button', { class: 'btn small ghost', title: 'Remove', onclick: e => { e.stopPropagation(); removeClips([id]); } }, '✕');
-  r.acts.append(retry, del);
+  const flag = (cls, key, icon, tip) => h('button', {
+    class: 'btn small ghost flag ' + cls, title: tip,
+    onclick: e => { e.stopPropagation(); const c = clipById(id); if (c) setFlags([id], { [key]: !c[key] }); },
+  }, icon);
+  r.acts.append(
+    flag('t-shot', 'shot', '🥃', 'Shot song: a "take a shot" card plays before it'),
+    flag('t-bonus', 'bonus', '🎁', 'Bonus song: plays after the end card'),
+    retry, del);
   el.append(r.handle, r.num, r.thumb, r.info, r.mini, r.win, r.status, r.acts);
   el.addEventListener('click', () => {
     const c = clipById(id);
@@ -516,7 +574,9 @@ function makeRow(id) {
 }
 function clearDropMarks() { $$('.drop-before, .drop-after').forEach(x => x.classList.remove('drop-before', 'drop-after')); }
 
-function moveClip(srcId, targetId, after) {
+async function moveClip(srcId, targetId, after) {
+  const src = clipById(srcId), tgt = clipById(targetId);
+  if (src && tgt && !!src.bonus !== !!tgt.bonus) await setFlags([srcId], { bonus: !!tgt.bonus });   // dragged across the bonus header
   const ids = S.project.clips.map(c => c.id).filter(x => x !== srcId);
   const idx = ids.indexOf(targetId) + (after ? 1 : 0);
   ids.splice(idx, 0, srcId);
@@ -533,13 +593,19 @@ async function removeClips(ids) {
   poll();
 }
 
-function updateRow(r, c, i, target) {
+function updateRow(r, c, i, target, bonus = false) {
   const m = (c.media_key && S.media[c.media_key]) || {};
   const st = clipStatus(c);
   const w = S.summary?.windows?.[c.id];
-  r.num.textContent = i + 1;
-  r.num.classList.toggle('over', i >= target);
-  r.num.title = i >= target ? 'Past your target length - still included in the video' : '';
+  r.num.textContent = bonus ? `B${i + 1}` : i + 1;
+  r.num.classList.toggle('over', !bonus && i >= target);
+  r.num.classList.toggle('bonus', bonus);
+  r.num.title = bonus ? 'Bonus song - plays after the end card'
+    : i >= target ? 'Past your target length - still included in the video' : '';
+  r.el.classList.toggle('is-shot', !!c.shot);
+  r.el.classList.toggle('is-bonus', bonus);
+  $('.t-shot', r.acts).classList.toggle('on', !!c.shot);
+  $('.t-bonus', r.acts).classList.toggle('on', bonus);
   const thumb = c.thumbnail || m.thumbnail || (['ready', 'long'].includes(m.status)
     ? `/api/thumb/${encodeURIComponent(c.media_key)}?t=${Math.round((m.duration || 60) * 0.3)}` : null);
   const bg = thumb ? `url("${thumb}")` : '';
@@ -753,7 +819,7 @@ const trimmer = {
     const st = clipStatus(c);
     const m = (c.media_key && S.media[c.media_key]) || {};
     const w = S.summary?.windows?.[c.id];
-    $('#trim-num').textContent = idx + 1;
+    $('#trim-num').textContent = clipNumber(c);
     $('#trim-title').textContent = m.title || c.title || c.query || '';
     $('#trim-sub').textContent = [m.channel || c.channel, m.duration ? fmtTime(m.duration) : '', m.views ? fmtViews(m.views) : '', st.text].filter(Boolean).join(' · ');
     const dt = $('#trim-display-title'), da = $('#trim-display-artist');
@@ -1149,6 +1215,12 @@ const previews = {
         this.sigs.stinger = sig;
         if ($('#trans-video').classList.contains('hidden')) this.frame($('#stinger-frame'), 'kind=stinger&t=1', null, $('#trans-empty'));
       }
+      const sh = p.transition.shot || {};
+      const shotSig = JSON.stringify([sh, p.overlays.font, p.settings.resolution, sh.media_key && S.media[sh.media_key]?.status]);
+      if (this.sigs.shot !== shotSig) {
+        this.sigs.shot = shotSig;
+        this.frame($('#shot-frame'), 'kind=shot&t=1.5', $('#shot-video'));
+      }
     }
     if (S.tab === 'look') this.updateLook();
   },
@@ -1160,7 +1232,7 @@ const previews = {
     const opts = ready.map(c => `${c.id}`).join(',');
     if (sel.dataset.opts !== opts) {
       sel.dataset.opts = opts;
-      sel.replaceChildren(...ready.map(c => new Option(`${S.project.clips.indexOf(c) + 1}. ${S.summary.windows[c.id].title}`, c.id)));
+      sel.replaceChildren(...ready.map(c => new Option(`${clipNumber(c)}. ${S.summary.windows[c.id].title}`, c.id)));
       if (ready.some(c => c.id === cur)) sel.value = cur;
     }
     $('#look-empty').classList.toggle('hidden', ready.length > 0);
@@ -1518,6 +1590,8 @@ function wire() {
 
   $('#btn-preview-transition').addEventListener('click', e => previews.render('transition', $('#trans-video'), e.currentTarget, [$('#trans-empty'), $('#stinger-frame')]));
   $('#btn-preview-stinger').addEventListener('click', e => previews.render('stinger', $('#trans-video'), e.currentTarget, [$('#trans-empty'), $('#stinger-frame')]));
+  $('#btn-preview-shot').addEventListener('click', e => previews.render('shot', $('#shot-video'), e.currentTarget, [$('#shot-frame')]));
+  $('#btn-shots').addEventListener('click', openShots);
   for (const which of ['intro', 'outro']) {
     $(`#btn-preview-${which}`).addEventListener('click', e => previews.render(which, $(`#${which}-video`), e.currentTarget));
     $(`#${which}-t`).addEventListener('input', () => previews.changed());
@@ -1724,6 +1798,43 @@ const sectioner = {
     document.addEventListener('keydown', e => { if (this.id && e.key === 'Escape') this.close(); });
   },
 };
+
+// Pick shot songs in one go: every Nth main song, N at random, or none.
+function openShots() {
+  const main = S.project.clips.filter(c => !c.bonus);
+  const every = h('input', { type: 'number', class: 'num', min: 2, max: 60, value: 10 });
+  const count = h('input', { type: 'number', class: 'num', min: 1, max: 60, value: 5 });
+  const apply = (ids, btn) => withBusy(btn, async () => {
+    const all = S.project.clips.map(c => c.id);
+    await api.post('/api/clips/flags', { ids: all, shot: false });
+    if (ids.length) await api.post('/api/clips/flags', { ids, shot: true });
+    closeModal();
+    await poll();
+    toast(ids.length ? `${ids.length} shot song${ids.length > 1 ? 's' : ''} - each gets a "take a shot" card` : 'No shot songs', 'ok');
+  });
+  const everyBtn = h('button', { class: 'btn gold' }, 'Apply');
+  everyBtn.addEventListener('click', () => {
+    const n = Math.max(2, Math.round(+every.value || 10));
+    apply(main.filter((_c, i) => (i + 1) % n === 0).map(c => c.id), everyBtn);
+  });
+  const randomBtn = h('button', { class: 'btn gold' }, 'Apply');
+  randomBtn.addEventListener('click', () => {
+    const ids = main.map(c => c.id);
+    for (let i = ids.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [ids[i], ids[j]] = [ids[j], ids[i]]; }
+    apply(ids.slice(0, Math.max(1, Math.round(+count.value || 5))), randomBtn);
+  });
+  const clearBtn = h('button', { class: 'btn danger' }, 'Clear all shot songs');
+  clearBtn.addEventListener('click', () => apply([], clearBtn));
+  openModal(
+    h('div', { class: 'modal-head' }, h('h3', {}, '🥃 Shot songs'), h('button', { class: 'btn ghost icon', onclick: closeModal }, '✕')),
+    h('div', { class: 'modal-body' },
+      h('p', { class: 'muted small' }, 'A "take a shot" card plays before every shot song (style it in the Transitions tab). You can also click 🥃 on any song in the playlist. This replaces the current shot songs.'),
+      h('div', { class: 'field-row' }, h('span', {}, 'Every'), every, h('span', {}, 'th song'), h('span', { class: 'spacer' }), everyBtn),
+      h('div', { class: 'field-row' }, count, h('span', {}, 'songs at random'), h('span', { class: 'spacer' }), randomBtn),
+      h('div', { class: 'field-row' }, clearBtn)),
+    h('div', { class: 'modal-foot' }, h('span', { class: 'spacer' }), h('button', { class: 'btn', onclick: closeModal }, 'Close')),
+  );
+}
 
 async function openFolder() {
   let path = '';

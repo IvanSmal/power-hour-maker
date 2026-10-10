@@ -60,7 +60,7 @@ class ExportJob(render.RenderJob):
     def _media_items(self):
         plan, fps = self.plan, self.plan["fps"]
         items, by_hash = [], {}
-        n_stinger = 0
+        n_card = {"stinger": 0, "shot": 0}
         for k, s in enumerate(plan["segments"]):
             spec = deepcopy(s)
             spec.update(head=0, tail=0, entry_sfx=None)
@@ -75,14 +75,17 @@ class ExportJob(render.RenderJob):
                     after = render.floor_snap(max(0.0, min(self.handles, room)), fps)
                     v["ss"] = round(v.get("ss", 0) - before, 3)
                 spec["dur"] = round(s["dur"] + before + after, 4)
-                name = f"{s['n']:03d} {_safe(s.get('_title') or 'song')}.mov"
-            elif s["kind"] == "stinger":
-                n_stinger += 1
-                name = f"S{n_stinger:03d} stinger.mov"
+                name = f"{s.get('_tag') or format(s['n'], '03d')} {_safe(s.get('_title') or 'song')}.mov"
+            elif s["kind"] in n_card:
+                n_card[s["kind"]] += 1
+                name = (f"S{n_card['stinger']:03d} stinger.mov" if s["kind"] == "stinger"
+                        else f"X{n_card['shot']:03d} shot card.mov")
+            elif s["kind"] == "gap":
+                name = "B00 bonus gap.mov"
             else:
                 name = f"{'000' if s['kind'] == 'intro' else '999'} {s['kind']}.mov"
             h = render.spec_hash(spec)
-            if h in by_hash:              # identical stingers share one file
+            if h in by_hash:              # identical stingers / shot cards share one file
                 items.append(dict(by_hash[h], k=k))
                 continue
             item = {"k": k, "spec": spec, "hash": h, "file": self.out_dir / "media" / name, "offset": before}
@@ -172,10 +175,9 @@ class ExportJob(render.RenderJob):
                 canvas.alpha_composite(img, (max(0, x), max(0, y)))
                 digest = hashlib.sha1(canvas.tobytes()).hexdigest()[:10]
                 if digest not in pngs:
-                    label = {"counter": f"counter {ov.get('n', 0):03d}",
-                             "lower_third": f"title {s['n']:03d}",
-                             "big_number": f"countdown {ov.get('text')}",
-                             "card_text": f"trivia {s['n']:03d}"}[kind]
+                    tag = s.get("_tag") or f"{s['n']:03d}"
+                    label = {"counter": f"counter {tag}", "lower_third": f"title {tag}",
+                             "big_number": f"countdown {ov.get('text')}", "card_text": f"trivia {tag}"}[kind]
                     p = gdir / f"{label}.png"
                     canvas.save(p)
                     pngs[digest] = p
@@ -435,7 +437,8 @@ Open one of the timeline files:
   Anything else      : {self.base}.edl (main video track only)
 
 Tracks
-  Video 1  Songs, intro, outro and stingers, with the transitions as dissolves
+  Video 1  Songs (bonus songs after the outro), intro, outro, stingers and shot cards,
+           with the transitions as dissolves
   Video 2+ Trivia covers (if used), song titles / drink counter / countdown numbers
            (transparent PNGs, full frame)
   Audio 1  Song audio (already loudness-matched)

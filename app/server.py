@@ -84,6 +84,7 @@ def _resume():
 def _background_keys(p):
     keys = [p["intro"]["bg"].get("media_key"), p["outro"]["bg"].get("media_key"),
             (p["transition"].get("stinger") or {}).get("media_key"),
+            (p["transition"].get("shot") or {}).get("media_key"),
             ((p["overlays"].get("trivia") or {}).get("bg") or {}).get("media_key")]
     return [k for k in keys if k]
 
@@ -151,7 +152,7 @@ def _summary(p):
     st = p["settings"]
     clip_s = float(st["clip_seconds"]) or 60
     target = max(1, math.ceil(float(st["target_minutes"]) * 60 / clip_s))
-    counts = {"ready": 0, "pending": 0, "error": 0, "short": 0, "long": 0}
+    counts = {"ready": 0, "pending": 0, "error": 0, "short": 0, "long": 0, "bonus_ready": 0}
     for c in p["clips"]:
         if c.get("resolve") == "error":
             counts["error"] += 1
@@ -160,7 +161,7 @@ def _summary(p):
         if not m or c.get("resolve") == "searching":
             counts["pending"] += 1
         elif m["status"] == "ready":
-            counts["ready"] += 1
+            counts["bonus_ready" if c.get("bonus") else "ready"] += 1
             if (m.get("duration") or 0) < clip_s:
                 counts["short"] += 1
         elif m["status"] == "error":
@@ -169,7 +170,9 @@ def _summary(p):
             counts["long"] += 1
         else:
             counts["pending"] += 1
-    out = {"target": target, "total": len(p["clips"]), **counts, "duration": 0, "times": {}, "windows": {}}
+    out = {"target": target, "total": len(p["clips"]), **counts, "duration": 0, "times": {}, "windows": {},
+           "bonus": sum(1 for c in p["clips"] if c.get("bonus")),
+           "shots": sum(1 for c in p["clips"] if c.get("shot"))}
     try:
         plan = _builder().build()
         out["duration"] = plan["duration"]
@@ -395,6 +398,16 @@ def clips_update():
     return ok()
 
 
+@app.post("/api/clips/flags")
+def clips_flags():
+    """{ids, shot?, bonus?}: mark songs as shot songs / bonus songs (bonus songs move to the end)."""
+    b = body()
+    fields = {k: bool(b[k]) for k in ("shot", "bonus") if k in b}
+    if fields:
+        projects.set_flags(b.get("ids") or [], fields)
+    return ok()
+
+
 @app.post("/api/clips/remove")
 def clips_remove():
     projects.remove_clips(body().get("ids") or [])
@@ -566,6 +579,8 @@ def frame():
     elif kind == "stinger":
         total = max(10, len(b.ready_clips()))
         seg = b.single(b.stinger_segment(3, total))["segments"][0]
+    elif kind == "shot":
+        seg = b.single(b.shot_segment(12, max(12, len(b.ready_clips()))))["segments"][0]
     else:
         return fail("Unknown kind")
     img = render.preview_frame(seg, t)
@@ -598,6 +613,9 @@ def preview():
         elif kind == "stinger":
             b = _builder(size=size, quality="draft")
             plan = b.single(b.stinger_segment(3, max(10, len(b.ready_clips()))))
+        elif kind == "shot":
+            b = _builder(size=size, quality="draft")
+            plan = b.single(b.shot_segment(12, max(12, len(b.ready_clips()))))
         else:
             return fail("Unknown preview")
         wd = paths.WORK / pid / "preview"
@@ -792,6 +810,7 @@ def songs():
     sm = _cached_summary()
     clip_s = float(p["settings"]["clip_seconds"])
     out = []
+    n_bonus = 0
     for i, c in enumerate(p["clips"]):
         m = media.get(c["media_key"], heavy=True) if c.get("media_key") else None
         w = sm["windows"].get(c["id"])
@@ -802,6 +821,11 @@ def songs():
                "status": state, "url": c.get("url"), "video_seconds": (m or {}).get("duration")}
         if err:
             row["error"] = err
+        if c.get("shot"):
+            row["shot"] = True
+        if c.get("bonus"):
+            n_bonus += 1
+            row["bonus"] = f"B{n_bonus}"
         if w:
             row.update(start=w["ss"], end=round(w["ss"] + w["dur"], 2), picked_by=w["src"],
                        plays_at=sm["times"].get(c["id"]))
@@ -810,7 +834,7 @@ def songs():
         if m and m.get("status") == "long":
             row["suggested_section_start"] = analysis.suggest_section(m, _section_seconds())
         out.append(row)
-    keys = ("target", "total", "ready", "pending", "error", "short", "long", "duration")
+    keys = ("target", "total", "ready", "pending", "error", "short", "long", "duration", "bonus", "shots")
     return jsonify(project=p["name"], songs=out, summary={k: sm.get(k) for k in keys})
 
 

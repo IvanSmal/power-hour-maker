@@ -223,7 +223,9 @@ def add_local_videos(path: str, include_subfolders: bool = False) -> dict:
 def list_songs() -> dict:
     """Every song in order: position, id, on-screen title/artist, status (ready, short, needs
     section, failed, not found, downloading...), the chosen minute (start/end seconds in the
-    video) and what picked it (heatmap = YouTube "most replayed", loudness, manual...)."""
+    video) and what picked it (heatmap = YouTube "most replayed", loudness, manual...).
+    shot: true = a "take a shot" card plays before it; bonus: "B1", "B2"... = plays after the outro
+    (bonus songs are always listed last)."""
     return _songs()
 
 
@@ -273,10 +275,17 @@ def song_details(song: str) -> dict:
 
 @mcp.tool()
 def set_song(song: str, start_seconds: float | None = None, title: str | None = None,
-             artist: str | None = None, use_automatic_start: bool = False) -> dict:
+             artist: str | None = None, use_automatic_start: bool = False, shot: bool | None = None,
+             bonus: bool | None = None) -> dict:
     """Change one song: start_seconds moves its minute (seconds into the video); title/artist
-    override the on-screen text; use_automatic_start=True returns to the automatic pick."""
+    override the on-screen text; use_automatic_start=True returns to the automatic pick.
+    shot=True makes it a shot song (a "take a shot" card plays before it - style it with
+    update_settings transition.shot); bonus=True makes it a secret bonus song that plays after the
+    outro ("BONUS 1", "BONUS 2"... in the order they're marked; not counted in the song total)."""
     row = _find(song)
+    flags = {k: v for k, v in (("shot", shot), ("bonus", bonus)) if v is not None}
+    if flags:
+        _post("/api/clips/flags", {"ids": [row["id"]], **flags})
     data = {"id": row["id"]}
     if use_automatic_start:
         data["start"] = None
@@ -389,7 +398,10 @@ def update_settings(changes: dict) -> dict:
               animated, dim}}  - guess-the-song mode
     transition: effect (see options), duration (s), random (bool), sfx (sound id), sfx_volume (0-1.5),
               sfx_first (bool), stinger {enabled, text, subtext ({n},{left},{next},{total}), duration,
-              c1, c2, text_color, sfx}
+              c1, c2, text_color, sfx},
+              shot {text, subtext ({n} = song number), duration, c1, c2, text_color, glass (bool, draws a
+              shot glass), sfx} - the card before songs marked shot=True (see set_song)
+    bonus: gap (seconds of black between the outro and the bonus songs), label ("BONUS")
     intro / outro: enabled, duration, title, subtitle ({count},{minutes},{name}), font, color, sub_color,
               bg {type ("gradient"|"color"|"image"|"media"), c1, c2, style ("linear"|"radial"|"circular"|
               "spiral"|"square"), animated, dim}, audio {type ("none"|"sfx"|"media"), sfx, volume},

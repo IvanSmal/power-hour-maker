@@ -63,6 +63,19 @@ DEFAULT_PROJECT = {
             "media_key": None,
             "start": 0,
         },
+        # Card played before every song marked as a shot song (replaces the stinger there).
+        "shot": {
+            "text": "TAKE A SHOT!",
+            "subtext": "no sipping · down it!",
+            "duration": 4.0,
+            "c1": "#7a2a00",                # whiskey brown, dark at the edges
+            "c2": "#140400",
+            "text_color": "#ffffff",
+            "glass": True,              # draw a shot glass above the text
+            "sfx": "gong",
+            "media_key": None,          # optional video instead of the colour card
+            "start": 0,
+        },
     },
     "intro": {
         "enabled": True,
@@ -94,10 +107,12 @@ DEFAULT_PROJECT = {
         "countdown_beeps": False,
         "transition": {"effect": "fadeblack", "duration": 1.5},
     },
+    # Songs marked bonus play after the outro ("hidden tracks"), counted as BONUS 1, BONUS 2, ...
+    "bonus": {"gap": 3.0, "label": "BONUS"},
     "clips": [],
 }
 
-PATCHABLE = ("name", "settings", "overlays", "transition", "intro", "outro")
+PATCHABLE = ("name", "settings", "overlays", "transition", "intro", "outro", "bonus")
 CLIP_FIELDS = ("start", "display_title", "display_artist")
 
 APP_DEFAULTS = {
@@ -259,12 +274,15 @@ class ProjectStore:
                     "display_artist": "",
                     "resolve": e.get("resolve"),     # 'searching' | 'error' while a query is looked up
                     "error": None,
+                    "shot": False,                   # a "take a shot" card plays before it
+                    "bonus": False,                  # plays after the outro
                 })
             clips = self.project["clips"]
             if index is None or index >= len(clips):
                 clips.extend(new)
             else:
                 clips[index:index] = new
+            self._partition()
             self.save()
             return new
 
@@ -289,12 +307,37 @@ class ProjectStore:
             by_id = {c["id"]: c for c in self.project["clips"]}
             ordered = [by_id.pop(i) for i in ids if i in by_id]
             self.project["clips"] = ordered + list(by_id.values())
+            self._partition()
             self.save()
 
     def shuffle(self):
+        """Shuffle the main songs; bonus songs keep their order at the end."""
         with self.lock:
-            random.shuffle(self.project["clips"])
+            main = [c for c in self.project["clips"] if not c.get("bonus")]
+            random.shuffle(main)
+            self.project["clips"] = main + [c for c in self.project["clips"] if c.get("bonus")]
             self.save()
+
+    def set_flags(self, ids, fields):
+        """Set shot / bonus on several clips at once. A song that changes group goes to the end of
+        its new group (so bonus songs are numbered in the order they were marked)."""
+        with self.lock:
+            ids = set(ids)
+            clips = self.project["clips"]
+            moved = {c["id"] for c in clips
+                     if c["id"] in ids and "bonus" in fields and bool(c.get("bonus")) != fields["bonus"]}
+            for c in clips:
+                if c["id"] in ids:
+                    c.update(fields)
+            self.project["clips"] = [c for c in clips if c["id"] not in moved] + \
+                                    [c for c in clips if c["id"] in moved]
+            self._partition()
+            self.save()
+
+    def _partition(self):
+        """Bonus songs always sit after the main songs (stable, so both keep their own order)."""
+        clips = self.project["clips"]
+        self.project["clips"] = [c for c in clips if not c.get("bonus")] + [c for c in clips if c.get("bonus")]
 
 
 _SAFE = re.compile(r'[<>:"/\\|?*\x00-\x1f]')

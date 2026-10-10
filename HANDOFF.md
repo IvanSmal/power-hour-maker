@@ -133,6 +133,21 @@ video cover, answers "artist · year"). Fixes found on the way:
 GitHub: public repo `IvanSmal/power-hour-maker` (made public by the user; gh CLI installed via
 winget, logged in as IvanSmal; repo-local git identity uses the GitHub no-reply address).
 
+## Round 4 — shot songs, bonus songs, 30-min preset (done, tested)
+
+- Clips have `shot` and `bonus` flags (`/api/clips/flags` {ids, shot?, bonus?}; MCP `set_song(shot=,
+  bonus=)`). `ProjectStore._partition()` keeps bonus songs after the main songs (add/reorder/flags);
+  a song that changes group goes to the end of its new group (`set_flags`; app.js `setFlags` mirrors it).
+- Plan (`PlanBuilder.build`): main songs as before; a shot song is led by `shot_segment` (the shot
+  card carries the change's sound, replaces the stinger there); after the outro: `gap_segment`
+  (`bonus.gap` s of black, joined with a 1 s fade) then the bonus songs, counter label `bonus.label`
+  + number, chapters "Bonus 1"... (no titles - they're secret). `{count}`/`{minutes}`/target ignore
+  bonus songs. `_flash_card()` is shared by stinger and shot cards; `cards.shot_glass` draws the
+  glass (4x supersampled). Spec bookkeeping: `_tag` ("012" / "B01") names export files/graphics.
+- UI: 🥃/🎁 toggles per row, "🎁 Bonus songs" header in the playlist (gap + label inputs, drop target),
+  "🥃 Shot songs" toolbar modal (every Nth / random / clear), shot card panel + preview in Transitions,
+  stats pills. Length presets now 30/60/100/120.
+
 ## Immediate next steps
 
 1. Real window mode with the single-instance `main.py` is still untested (launch twice → second

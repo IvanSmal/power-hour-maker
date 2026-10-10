@@ -34,12 +34,20 @@ is installed system-wide. Run `setup.ps1 -DesktopShortcut` to also put a shortcu
 - Videos shorter than a minute are fine: they play as-is, or loop to fill the slot
   (Songs → *Short videos*).
 - Drag ⋮⋮ to reorder, or shuffle.
+- **🥃 Shot songs**: click 🥃 on a song and a "TAKE A SHOT!" card (shot-glass graphic, text and a
+  sound, or your own clip - Transitions tab) plays right before it. *🥃 Shot songs* in the toolbar
+  marks every Nth song or a few at random.
+- **🎁 Bonus songs**: click 🎁 and the song becomes a secret extra that plays after the end card,
+  after a few seconds of black - counted as BONUS 1, BONUS 2, ... (not part of the song total, the
+  intro/outro numbers or the chapter titles, so it stays a surprise). Drag songs in or out of the
+  bonus section to change it.
 
 **Intro & Outro**: title card with gradient/colour/image/video background, music or a sound
 effect, optional 3-2-1 countdown, and the transition into the first song / out of the last.
 
 **Transitions**: 30 effects (or a random mix), the drink signal sound (air horn, buzzer, gong,
-glass clink, ... or your own file), and an optional "DRINK!" stinger card or clip between songs.
+glass clink, ... or your own file), an optional "DRINK!" stinger card or clip between songs, and the
+"TAKE A SHOT!" card for shot songs.
 
 **Look**: theme presets (Halloween, Christmas, St Patrick's, birthday, New Year, neon 80s,
 Centurion...), resolution (up to 4K, or vertical/square), how odd-shaped videos fill the frame,
