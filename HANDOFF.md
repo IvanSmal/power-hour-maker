@@ -150,6 +150,11 @@ winget, logged in as IvanSmal; repo-local git identity uses the GitHub no-reply 
 
 ## Immediate next steps
 
+0. YouTube started answering "Sign in to confirm you're not a bot" after ~130 downloads on
+   2026-10-10. The horror project has 3 bonus songs queued (B3-B5: Somebody's Watching Me, Five
+   Nights at Freddy's, Monster Mash) that failed for that reason: retry later, or with the user's
+   OK set Settings -> Browser cookies -> Firefox; then re-render (only the new pieces render).
+
 1. Real window mode with the single-instance `main.py` is still untested (launch twice → second
    attaches; close window → backend exits after idle; MCP attaches to the window's backend).
 2. Ask the user whether to run `install-claude.ps1` (modifies `~/.claude.json` and Claude Desktop

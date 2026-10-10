@@ -239,7 +239,7 @@ def wait_for_downloads(timeout_seconds: int = 180) -> dict:
         data = _songs()
         rows = data["songs"]
         busy = [r for r in rows if r["status"] in busy_states or r["status"].lower().startswith(
-            ("downloading", "fetching", "analyzing", "cutting"))]
+            ("downloading", "fetching", "analyzing", "cutting", "retrying"))]
         if not busy or time.time() > deadline:
             break
         time.sleep(3)
