@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "power-hour-maker",
+      "runtimeExecutable": "F:/Documents/Claude/power hour maker/.venv/Scripts/python.exe",
+      "runtimeArgs": ["-m", "app", "--serve", "--port", "8765", "--verbose"],
+      "port": 8765
+    }
+  ]
+}

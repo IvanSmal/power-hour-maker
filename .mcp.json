@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "power-hour": {
+      "type": "stdio",
+      "command": "F:\\Documents\\Claude\\power hour maker\\.venv\\Scripts\\python.exe",
+      "args": [
+        "F:\\Documents\\Claude\\power hour maker\\power_hour_mcp.py"
+      ],
+      "env": {}
+    }
+  }
+}

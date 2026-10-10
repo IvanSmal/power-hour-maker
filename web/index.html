@@ -1,0 +1,378 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Power Hour Maker</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🍺</text></svg>">
+<link rel="stylesheet" href="/ui/style.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand"><span class="brand-mug">🍺</span><span class="brand-name">POWER&nbsp;HOUR<b>MAKER</b></span></div>
+  <div class="project-box">
+    <input class="project-name" data-bind="name" spellcheck="false" title="Project name">
+    <button class="btn ghost icon" id="btn-projects" title="Projects">▾</button>
+  </div>
+  <div class="stats" id="stats"></div>
+  <div class="top-actions">
+    <button class="btn ghost" id="btn-settings" title="Settings">⚙ Settings</button>
+    <button class="btn gold" id="btn-goto-render">▶ Render</button>
+  </div>
+</header>
+
+<nav class="tabs" id="tabs">
+  <button data-tab="songs" class="active">🎵 Songs</button>
+  <button data-tab="cards">🎬 Intro &amp; Outro</button>
+  <button data-tab="transitions">✨ Transitions</button>
+  <button data-tab="look">🎨 Look</button>
+  <button data-tab="render">🚀 Render</button>
+</nav>
+
+<main>
+<!-- ============================== SONGS ============================== -->
+<section class="tab-page active" id="tab-songs">
+  <div class="panel length-panel">
+    <div class="field-row">
+      <label class="lbl">Length</label>
+      <div class="seg" data-bind="settings.target_minutes" data-type="number">
+        <button data-value="60">60 min</button><button data-value="100">100 min</button><button data-value="120">120 min</button>
+      </div>
+      <input type="number" class="num" min="1" max="600" data-bind="settings.target_minutes" data-type="number" title="Custom length in minutes"><span class="unit">min</span>
+      <span class="divider"></span>
+      <label class="lbl">Each song plays</label>
+      <input type="number" class="num" min="5" max="600" step="1" data-bind="settings.clip_seconds" data-type="number"><span class="unit">sec</span>
+      <span class="divider"></span>
+      <label class="lbl" title="What happens with videos shorter than one clip">Short videos</label>
+      <div class="seg" data-bind="settings.short_mode">
+        <button data-value="full" title="Play the whole short video, then move on">Play as-is</button><button data-value="loop" title="Loop it until the clip time is filled">Loop to fill</button>
+      </div>
+    </div>
+    <div class="fill-meter"><div class="fill-bar" id="fill-bar"></div><div class="fill-text" id="fill-text"></div></div>
+  </div>
+
+  <div class="panel search-panel">
+    <form class="search-row" id="search-form" autocomplete="off">
+      <select id="search-source" title="Where to search"></select>
+      <input id="search-input" placeholder="Search for a song, or paste a YouTube / Vimeo / TikTok / … link  (Ctrl+F)" spellcheck="false">
+      <button class="btn gold" type="submit">Search</button>
+      <button class="btn" type="button" id="btn-bulk" title="Paste a whole list of songs">📋 Bulk add</button>
+      <button class="btn" type="button" id="btn-local" title="Add video files from this computer">🎞 Add files</button>
+      <button class="btn" type="button" id="btn-folder" title="Add every video in a folder">📁 Add folder</button>
+    </form>
+    <div class="results hidden" id="results">
+      <div class="results-head"><span id="results-title"></span><button class="btn ghost small" id="results-close">Close ✕</button></div>
+      <div class="results-grid" id="results-grid"></div>
+    </div>
+  </div>
+
+  <div class="panel list-panel">
+    <div class="list-toolbar">
+      <span class="list-title">Playlist</span>
+      <span class="muted small" id="list-hint">Drag ⋮⋮ to reorder · click a row to pick the minute</span>
+      <span class="spacer"></span>
+      <button class="btn small" id="btn-shuffle">🔀 Shuffle</button>
+      <button class="btn small" id="btn-reset-starts" title="Forget manual start points and use Most-Replayed / loudest again">↺ Auto start points</button>
+      <button class="btn small" id="btn-retry-all">⟳ Retry failed</button>
+      <button class="btn small gold hidden" id="btn-auto-sections" title="Long videos: use the suggested part of each">✂ Suggested sections</button>
+      <button class="btn small danger" id="btn-remove-failed">Remove failed</button>
+    </div>
+    <div class="clip-list" id="clip-list"></div>
+    <div class="empty hidden" id="empty-list">
+      <div class="empty-mug">🍻</div>
+      <h2>No songs yet</h2>
+      <p>Search above, paste links (playlists work too), or use <b>Bulk add</b> to paste a whole list of songs at once.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============================== INTRO / OUTRO ============================== -->
+<section class="tab-page" id="tab-cards">
+  <div class="cards-grid" id="cards-grid"></div>
+</section>
+
+<!-- ============================== TRANSITIONS ============================== -->
+<section class="tab-page" id="tab-transitions">
+  <div class="two-col">
+    <div class="col">
+      <div class="panel">
+        <h3>Transition effect</h3>
+        <div class="effect-grid" id="effect-grid"></div>
+        <div class="field-row">
+          <label class="lbl">Duration</label>
+          <input type="range" min="0.2" max="2.5" step="0.1" data-bind="transition.duration" data-type="number">
+          <output data-for="transition.duration" data-suffix=" s"></output>
+          <span class="spacer"></span>
+          <label class="toggle"><input type="checkbox" data-bind="transition.random"><span></span>Random mix</label>
+        </div>
+      </div>
+      <div class="panel">
+        <h3>Drink signal sound</h3>
+        <p class="muted small">Plays at every song change — the cue to drink.</p>
+        <div class="field-row">
+          <select data-bind="transition.sfx" data-options="sounds"></select>
+          <button class="btn small" data-play-sound="transition.sfx">▶ Listen</button>
+          <label class="lbl">Volume</label>
+          <input type="range" min="0" max="1.5" step="0.05" data-bind="transition.sfx_volume" data-type="number">
+          <output data-for="transition.sfx_volume" data-percent></output>
+        </div>
+        <label class="toggle"><input type="checkbox" data-bind="transition.sfx_first"><span></span>Also play it when the first song starts</label>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><h3>"DRINK!" stinger card</h3>
+          <label class="toggle"><input type="checkbox" data-bind="transition.stinger.enabled"><span></span>Insert between songs</label></div>
+        <p class="muted small">A short card between songs. Use <code>{n}</code> drinks done, <code>{left}</code> to go, <code>{next}</code>, <code>{total}</code>.</p>
+        <div class="form-grid" data-show="transition.stinger.enabled">
+          <label>Big text</label><input data-bind="transition.stinger.text">
+          <label>Small text</label><input data-bind="transition.stinger.subtext">
+          <label>Duration</label><div class="inline"><input type="range" min="0.5" max="8" step="0.5" data-bind="transition.stinger.duration" data-type="number"><output data-for="transition.stinger.duration" data-suffix=" s"></output></div>
+          <label>Colors</label><div class="inline"><input type="color" data-bind="transition.stinger.c1"><input type="color" data-bind="transition.stinger.c2"><span class="muted small">text</span><input type="color" data-bind="transition.stinger.text_color"></div>
+          <label>Sound</label><div class="inline"><select data-bind="transition.stinger.sfx" data-options="sounds"></select><button class="btn small" data-play-sound="transition.stinger.sfx">▶</button></div>
+          <label>Custom clip</label><div class="mediapick" data-mediapick="transition.stinger.media_key" data-start="transition.stinger.start"></div>
+        </div>
+      </div>
+    </div>
+    <div class="col">
+      <div class="panel sticky">
+        <h3>Preview</h3>
+        <div class="preview-box"><video id="trans-video" class="preview-video hidden" controls></video><img id="stinger-frame" class="preview-img hidden" alt=""><div class="preview-empty" id="trans-empty">Preview a transition between your first two songs.</div></div>
+        <div class="field-row"><button class="btn gold" id="btn-preview-transition">▶ Preview transition</button><button class="btn" id="btn-preview-stinger" data-show="transition.stinger.enabled">▶ Preview stinger</button></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================== LOOK ============================== -->
+<section class="tab-page" id="tab-look">
+  <div class="two-col">
+    <div class="col">
+      <div class="panel">
+        <h3>Video</h3>
+        <div class="form-grid">
+          <label>Resolution</label>
+          <select data-bind="settings.resolution">
+            <option value="1280x720">720p (1280×720)</option><option value="1920x1080">1080p (1920×1080)</option>
+            <option value="2560x1440">1440p (2560×1440)</option><option value="3840x2160">4K (3840×2160)</option>
+            <option value="1080x1920">Vertical 1080×1920</option><option value="1080x1080">Square 1080×1080</option>
+          </select>
+          <label>Frame rate</label>
+          <select data-bind="settings.fps" data-type="number"><option value="24">24</option><option value="25">25</option><option value="30">30</option><option value="60">60</option></select>
+          <label title="How videos with a different shape fill the frame">Odd-shaped videos</label>
+          <div class="seg" data-bind="settings.fill"><button data-value="blur">Blurred fill</button><button data-value="black">Black bars</button><button data-value="crop">Crop to fill</button></div>
+          <label>Quality</label>
+          <div class="seg" data-bind="settings.quality"><button data-value="draft">Draft</button><button data-value="good">Good</button><button data-value="best">Best</button></div>
+          <label>Audio</label>
+          <label class="toggle"><input type="checkbox" data-bind="settings.normalize_audio"><span></span>Even out loudness between songs</label>
+        </div>
+      </div>
+      <div class="panel">
+        <h3>Style</h3>
+        <div class="form-grid">
+          <label>Theme preset</label><div class="inline"><select id="theme-select"></select><button class="btn small" id="btn-apply-theme">Apply</button><span class="muted small">sets colours, fonts, texts &amp; sounds</span></div>
+          <label>Font</label><select data-bind="overlays.font" data-options="fonts"></select>
+          <label>Colors</label><div class="inline"><input type="color" data-bind="overlays.accent"><span class="muted small">accent</span><input type="color" data-bind="overlays.text_color"><span class="muted small">text</span></div>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><h3>Drink counter</h3><label class="toggle"><input type="checkbox" data-bind="overlays.counter.enabled"><span></span>Show</label></div>
+        <div class="form-grid" data-show="overlays.counter.enabled">
+          <label>Corner</label><div class="seg" data-bind="overlays.counter.position"><button data-value="tl">↖</button><button data-value="tr">↗</button><button data-value="bl">↙</button><button data-value="br">↘</button></div>
+          <label>Label</label><input data-bind="overlays.counter.label" placeholder="e.g. DRINK, SHOT, SONG">
+          <label>Number</label><select data-bind="overlays.counter.format"><option value="{n}">12</option><option value="{n}/{total}">12/60</option><option value="{left}">48 (left)</option></select>
+          <label>Size</label><div class="inline"><input type="range" min="0.5" max="2" step="0.1" data-bind="overlays.counter.scale" data-type="number"><output data-for="overlays.counter.scale" data-suffix="×"></output></div>
+          <label>Number color</label><input type="color" data-bind="overlays.counter.badge_text">
+        </div>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><h3>Song title</h3><label class="toggle"><input type="checkbox" data-bind="overlays.title.enabled"><span></span>Show</label></div>
+        <div class="form-grid" data-show="overlays.title.enabled">
+          <label>Show for</label><div class="inline"><input type="range" min="2" max="30" step="1" data-bind="overlays.title.seconds" data-type="number"><output data-for="overlays.title.seconds" data-suffix=" s"></output></div>
+          <label>Position</label><div class="seg" data-bind="overlays.title.position"><button data-value="tl">↖</button><button data-value="tr">↗</button><button data-value="bl">↙</button><button data-value="br">↘</button></div>
+          <label>Artist line</label><label class="toggle"><input type="checkbox" data-bind="overlays.title.show_artist"><span></span>Show artist</label>
+        </div>
+        <p class="muted small" data-show="overlays.trivia.enabled">Trivia mode is on: the title is hidden until the answer is revealed and then stays until the song ends.</p>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><h3>🎯 Trivia mode</h3><label class="toggle"><input type="checkbox" data-bind="overlays.trivia.enabled"><span></span>Guess the song</label></div>
+        <p class="muted small">Each song starts with sound only behind a cover, then the video plays without its title, and the answer is revealed at the end.</p>
+        <div data-show="overlays.trivia.enabled">
+          <div class="trivia-bar" id="trivia-bar"></div>
+          <div class="form-grid">
+            <label>🎧 Sound only</label><div class="inline"><input type="range" min="0" max="60" step="1" data-bind="overlays.trivia.audio_seconds" data-type="number"><output data-for="overlays.trivia.audio_seconds" data-suffix=" s"></output></div>
+            <label>🎬 + Video</label><div class="inline"><input type="range" min="0" max="60" step="1" data-bind="overlays.trivia.video_seconds" data-type="number"><output data-for="overlays.trivia.video_seconds" data-suffix=" s"></output></div>
+            <label>Answer</label><div class="seg" data-bind="overlays.trivia.reveal"><button data-value="lower_third">Song title box</button><button data-value="big">Big, centred</button></div>
+            <label>Cover text</label><input data-bind="overlays.trivia.text" placeholder="e.g. GUESS THE SONG">
+            <label>Small text</label><input data-bind="overlays.trivia.subtext" placeholder="{n} = song number, {total}">
+            <label>Cover</label><div class="seg" data-bind="overlays.trivia.bg.type"><button data-value="gradient">Gradient</button><button data-value="color">Colour</button><button data-value="image">Image</button><button data-value="media">Video</button><button data-value="blur" title="A heavily blurred copy of the song's own video — an extra hint">Blurred</button></div>
+            <label data-show="overlays.trivia.bg.type==gradient|color">Colors</label><div class="inline" data-show="overlays.trivia.bg.type==gradient|color"><input type="color" data-bind="overlays.trivia.bg.c1"><input type="color" data-bind="overlays.trivia.bg.c2" data-show="overlays.trivia.bg.type==gradient"></div>
+            <label data-show="overlays.trivia.bg.type==gradient">Style</label><div class="inline" data-show="overlays.trivia.bg.type==gradient"><select data-bind="overlays.trivia.bg.style"><option value="linear">Linear</option><option value="radial">Radial</option><option value="circular">Circular</option><option value="spiral">Spiral</option><option value="square">Square</option></select><label class="toggle"><input type="checkbox" data-bind="overlays.trivia.bg.animated"><span></span>Animated</label></div>
+            <label data-show="overlays.trivia.bg.type==image">Image</label><div class="assetpick" data-asset="overlays.trivia.bg.image" data-kind="image" data-show="overlays.trivia.bg.type==image"></div>
+            <label data-show="overlays.trivia.bg.type==media">Video</label><div class="mediapick" data-mediapick="overlays.trivia.bg.media_key" data-start="overlays.trivia.bg.start" data-show="overlays.trivia.bg.type==media"></div>
+            <label data-show="overlays.trivia.bg.type==image|media">Darken</label><div class="inline" data-show="overlays.trivia.bg.type==image|media"><input type="range" min="0" max="0.8" step="0.05" data-bind="overlays.trivia.bg.dim" data-type="number"><output data-for="overlays.trivia.bg.dim" data-percent></output></div>
+          </div>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><h3>Progress bar</h3><label class="toggle"><input type="checkbox" data-bind="overlays.progress.enabled"><span></span>Show</label></div>
+        <div class="form-grid" data-show="overlays.progress.enabled">
+          <label>Color</label><input type="color" data-bind="overlays.progress.color">
+          <label>Thickness</label><div class="inline"><input type="range" min="2" max="30" step="1" data-bind="overlays.progress.height" data-type="number"><output data-for="overlays.progress.height" data-suffix=" px"></output></div>
+        </div>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><h3>"Get ready" countdown</h3><label class="toggle"><input type="checkbox" data-bind="overlays.countdown.enabled"><span></span>Show</label></div>
+        <div class="form-grid" data-show="overlays.countdown.enabled">
+          <label>Last</label><div class="inline"><input type="range" min="1" max="10" step="1" data-bind="overlays.countdown.seconds" data-type="number"><output data-for="overlays.countdown.seconds" data-suffix=" s"></output></div>
+          <label>Position</label><div class="seg" data-bind="overlays.countdown.position"><button data-value="tl">↖</button><button data-value="tr">↗</button><button data-value="mc">Center</button><button data-value="bl">↙</button><button data-value="br">↘</button></div>
+        </div>
+      </div>
+    </div>
+    <div class="col">
+      <div class="panel sticky">
+        <h3>Live preview</h3>
+        <div class="preview-box"><img id="look-frame" class="preview-img" alt=""><div class="preview-empty hidden" id="look-empty">Add a song to see the overlays.</div></div>
+        <div class="field-row">
+          <select id="look-clip" title="Song to preview"></select>
+          <input type="range" id="look-time" min="0" max="60" step="0.5" value="3" title="Moment within the song">
+          <output id="look-time-out">0:03</output>
+        </div>
+        <p class="muted small" id="look-hint">Title shows at the start, the countdown at the end — scrub to check both.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================== RENDER ============================== -->
+<section class="tab-page" id="tab-render">
+  <div class="two-col">
+    <div class="col">
+      <div class="panel">
+        <h3>Ready check</h3>
+        <div class="checklist" id="checklist"></div>
+      </div>
+      <div class="panel">
+        <h3>Output</h3>
+        <div class="form-grid">
+          <label>File name</label><input id="out-name" placeholder="(project name + date)">
+          <label>Encoder</label><span id="encoder-label" class="muted"></span>
+        </div>
+        <div class="field-row render-buttons">
+          <button class="btn" id="btn-quick">⚡ Quick preview <span class="muted small">(3 songs, 480p)</span></button>
+          <button class="btn gold big" id="btn-render">🚀 Render full video</button>
+        </div>
+      </div>
+      <div class="panel">
+        <h3>Export for editing</h3>
+        <p class="muted small">Open the power hour in Premiere Pro, DaVinci Resolve or another editor to add your own things. Every song becomes its own clip (with spare footage on each side), the overlays become layers and the drink sounds get their own track.</p>
+        <div class="export-formats" id="export-formats"></div>
+        <div class="field-row"><label class="lbl">Spare footage per side</label>
+          <select id="export-handles"><option value="0">none</option><option value="2">2 s</option><option value="5" selected>5 s</option><option value="10">10 s</option></select>
+          <span class="spacer"></span><button class="btn" id="btn-export">🎞 Export project</button></div>
+        <div class="outputs mt" id="exports"></div>
+      </div>
+      <div class="panel hidden" id="render-progress">
+        <h3 id="render-stage">Rendering…</h3>
+        <div class="bigbar"><div id="render-bar"></div><span id="render-pct"></span></div>
+        <div class="field-row"><span class="muted" id="render-times"></span><span class="spacer"></span><button class="btn danger small" id="btn-cancel">Cancel</button></div>
+        <pre class="error-box hidden" id="render-error"></pre>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><h3>Tracklist</h3><button class="btn small" id="btn-copy-tracklist">Copy</button></div>
+        <pre class="tracklist" id="tracklist"></pre>
+      </div>
+    </div>
+    <div class="col">
+      <div class="panel sticky">
+        <h3 id="result-title">Result</h3>
+        <div class="preview-box"><video id="result-video" class="preview-video hidden" controls></video><div class="preview-empty" id="result-empty">Your finished video shows up here.</div></div>
+        <div class="field-row hidden" id="result-actions">
+          <button class="btn" id="btn-play-external">▶ Open in player</button>
+          <button class="btn" id="btn-reveal">📂 Show in folder</button>
+        </div>
+        <h3 class="mt">Previous renders</h3>
+        <div class="outputs" id="outputs"></div>
+      </div>
+    </div>
+  </div>
+</section>
+</main>
+
+<!-- trimmer -->
+<div class="modal-back hidden" id="trimmer">
+  <div class="modal trim-modal">
+    <div class="modal-head">
+      <span class="trim-num" id="trim-num"></span>
+      <div class="trim-titles"><div id="trim-title" class="trim-title"></div><div id="trim-sub" class="muted small"></div></div>
+      <button class="btn ghost icon" id="trim-close" title="Close (Esc)">✕</button>
+    </div>
+    <div class="trim-body">
+      <div class="trim-main">
+        <div class="video-wrap"><video id="trim-video" preload="auto"></video><div class="video-msg hidden" id="trim-video-msg"></div></div>
+        <canvas id="trim-canvas" class="trim-canvas"></canvas>
+        <div class="trim-legend"><span class="lg heat">■ Most replayed</span><span class="lg loud">■ Loudness</span><span class="muted small">Drag the gold box · click to seek · double-click to centre the minute there</span></div>
+        <div class="trim-controls">
+          <button class="btn gold" id="trim-play">▶ Play the minute</button>
+          <button class="btn" data-nudge="-5">−5s</button><button class="btn" data-nudge="-1">−1s</button>
+          <div class="time-box"><input id="trim-start" spellcheck="false"><span class="muted">→</span><span id="trim-end"></span></div>
+          <button class="btn" data-nudge="1">+1s</button><button class="btn" data-nudge="5">+5s</button>
+          <button class="btn" id="trim-at-playhead" title="Start the minute where the playhead is">⤓ Start here</button>
+        </div>
+      </div>
+      <aside class="trim-side">
+        <h4>Start point</h4>
+        <div class="snap-list">
+          <button class="snap" data-snap="heatmap"><b>🔥 Most replayed</b><span id="snap-heatmap"></span></button>
+          <button class="snap" data-snap="loudness"><b>🔊 Loudest minute</b><span id="snap-loudness"></span></button>
+          <button class="snap" data-snap="auto"><b>↺ Automatic</b><span id="snap-auto"></span></button>
+        </div>
+        <div class="muted small" id="trim-source"></div>
+        <div class="excerpt hidden" id="trim-excerpt"><span id="trim-excerpt-text"></span><button class="btn small" id="trim-change-section">✂ Change section</button></div>
+        <h4>On-screen title</h4>
+        <input id="trim-display-title" placeholder="Song title">
+        <input id="trim-display-artist" placeholder="Artist">
+        <h4>Wrong video?</h4>
+        <button class="btn small" id="trim-replace">🔎 Find another version</button>
+        <button class="btn small danger" id="trim-remove">Remove from playlist</button>
+      </aside>
+    </div>
+    <div class="modal-foot">
+      <button class="btn" id="trim-prev">‹ Previous</button>
+      <span class="muted small">Space play/pause · ←/→ nudge 1s (Shift 5s) · Enter next</span>
+      <span class="spacer"></span>
+      <button class="btn" id="trim-next">Next ›</button>
+      <button class="btn gold" id="trim-done">Done</button>
+    </div>
+  </div>
+</div>
+
+<!-- section picker for long videos -->
+<div class="modal-back hidden" id="sectioner">
+  <div class="modal section-modal">
+    <div class="modal-head">
+      <div class="trim-titles"><div class="trim-title" id="sec-title"></div><div class="muted small" id="sec-sub"></div></div>
+      <button class="btn ghost icon" id="sec-close" title="Close (Esc)">✕</button>
+    </div>
+    <div class="modal-body">
+      <p class="muted small">This video is long, so only a section of it is used. Pick roughly where (hover the strip to look around, drag the gold box), then choose the exact minute inside it.</p>
+      <div class="sec-preview"><img id="sec-big" alt=""><span id="sec-big-time"></span></div>
+      <div class="sec-strip" id="sec-strip"><div class="sec-thumbs" id="sec-thumbs"></div><canvas id="sec-canvas"></canvas></div>
+      <div class="field-row">
+        <label class="lbl">Start</label><input id="sec-start" class="num" style="width:90px">
+        <label class="lbl">Length</label><select id="sec-length"><option value="300">5 min</option><option value="600">10 min</option><option value="900">15 min</option></select>
+        <span class="muted" id="sec-range"></span>
+        <span class="spacer"></span>
+        <button class="btn" id="sec-suggest">🔥 Suggested</button>
+      </div>
+    </div>
+    <div class="modal-foot"><span class="muted small" id="sec-note"></span><span class="spacer"></span><button class="btn" id="sec-cancel">Cancel</button><button class="btn gold" id="sec-use">Use this section</button></div>
+  </div>
+</div>
+
+<!-- generic modal -->
+<div class="modal-back hidden" id="modal"><div class="modal" id="modal-box"></div></div>
+<div class="toasts" id="toasts"></div>
+<div class="conn hidden" id="conn">Lost connection to the app backend…</div>
+
+<script src="/ui/app.js"></script>
+</body>
+</html>

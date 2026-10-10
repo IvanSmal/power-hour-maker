@@ -1,0 +1,6 @@
+.venv/
+bin/
+runtime/
+data/
+__pycache__/
+*.lnk

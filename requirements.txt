@@ -1,0 +1,11 @@
+yt-dlp[default]
+flask>=3.0
+pywebview>=5.0
+pillow>=10.0
+# Claude integration (MCP server)
+mcp>=1.2
+# Export to Premiere / Resolve / other editors
+opentimelineio>=0.17
+otio-fcp-adapter
+otio-cmx3600-adapter
+otio-fcpx-xml-adapter
