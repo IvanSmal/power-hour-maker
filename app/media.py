@@ -106,6 +106,8 @@ class MediaStore:
         self.lock = threading.RLock()
         self.gate = threading.Condition()
         self.active = 0
+        self.tickets = 0        # jobs get a slot strictly in the order they were queued
+        self.serving = 0
         self.pool = ThreadPoolExecutor(max_workers=8, thread_name_prefix="media")
         self._fetch_locks = {}
         self._load()
@@ -176,6 +178,14 @@ class MediaStore:
             o["cookiefile"] = st["cookies_file"]
         return o
 
+    def _polite(self, opts):
+        """Downloads wait a little (randomised) before starting and between page requests: after a
+        burst of ~100 videos YouTube otherwise starts answering "confirm you're not a bot"."""
+        pause = float(self.get_settings().get("download_pause") or 0)
+        if pause > 0:
+            opts |= {"sleep_interval": pause, "max_sleep_interval": pause * 2, "sleep_interval_requests": 0.5}
+        return opts
+
     def search(self, query, source="youtube", limit=12):
         prefix = SEARCH_SOURCES.get(source, SEARCH_SOURCES["youtube"])[0]
         ylog = _YtLog()
@@ -224,7 +234,11 @@ class MediaStore:
             m.update(status="queued", stage="Queued", error=None, progress=0)
             self.running.add(key)
             self.cancelled.discard(key)
-        self.pool.submit(self._job, key)
+            with self.gate:
+                ticket = self.tickets
+                self.tickets += 1
+                # submitted under the lock: the pool's FIFO queue then matches ticket order
+                self.pool.submit(self._job, key, ticket)
 
     def add_local(self, path):
         p = Path(path).resolve()
@@ -239,11 +253,15 @@ class MediaStore:
             if key in self.running:
                 self.cancelled.add(key)
 
-    def _job(self, key):
+    def _job(self, key, ticket):
+        # First come, first served: without the ticket a thread that just finished a download picks
+        # up a fresh job and wins the free slot, so jobs already waiting can starve.
         with self.gate:
-            while self.active >= max(1, int(self.get_settings().get("concurrent_downloads") or 3)):
+            while ticket != self.serving or self.active >= max(1, int(self.get_settings().get("concurrent_downloads") or 3)):
                 self.gate.wait(1.0)
+            self.serving += 1
             self.active += 1
+            self.gate.notify_all()
         try:
             m = self.get(key)
             for attempt in range(3):
@@ -310,10 +328,10 @@ class MediaStore:
             elif d["status"] == "finished":
                 done_parts.append(d.get("filename"))
 
-        opts = self._ydl_opts(ylog) | {
+        opts = self._polite(self._ydl_opts(ylog) | {
             "format": fmt, "format_sort": sort, "merge_output_format": "mp4",
             "outtmpl": str(paths.CACHE / f"{key}.%(ext)s"), "progress_hooks": [hook],
-        }
+        })
         self._set(key, status="info", stage="Fetching info", progress=0)
         try:
             with yt_dlp.YoutubeDL(opts) as ydl:
@@ -446,9 +464,10 @@ class MediaStore:
                               + (f" - {speed / 1e6:.1f} MB/s" if speed else ""))
 
             fmt, sort = self._formats()
-            opts = self._ydl_opts(ylog) | {"format": fmt, "format_sort": sort, "merge_output_format": "mp4",
-                                           "outtmpl": str(paths.CACHE / f"{parent_key}.%(ext)s"),
-                                           "progress_hooks": [hook]}
+            opts = self._polite(self._ydl_opts(ylog) | {"format": fmt, "format_sort": sort,
+                                                        "merge_output_format": "mp4",
+                                                        "outtmpl": str(paths.CACHE / f"{parent_key}.%(ext)s"),
+                                                        "progress_hooks": [hook]})
             self._set(report_key, status="downloading", stage="Downloading the original", progress=0)
             try:
                 with yt_dlp.YoutubeDL(opts) as ydl:

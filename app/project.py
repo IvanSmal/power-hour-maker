@@ -118,6 +118,7 @@ CLIP_FIELDS = ("start", "display_title", "display_artist")
 APP_DEFAULTS = {
     "max_height": 1080,
     "concurrent_downloads": 3,
+    "download_pause": 3,         # seconds (randomised up to 2x) before each download; avoids YouTube bot checks
     "cookies_browser": "",
     "cookies_file": "",
     "encoder": "auto",
