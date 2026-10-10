@@ -1497,7 +1497,7 @@ async function openSettings() {
       h('div', { class: 'form-grid' },
         h('label', {}, 'Download quality'), sel('max_height', [[480, 'Up to 480p'], [720, 'Up to 720p'], [1080, 'Up to 1080p'], [1440, 'Up to 1440p'], [2160, 'Up to 4K']], Number),
         h('label', {}, 'Parallel downloads'), sel('concurrent_downloads', [1, 2, 3, 4, 5, 6].map(n => [n, n]), Number),
-        h('label', { title: 'A short random wait before each download. Without it YouTube may start asking to "confirm you're not a bot" after about a hundred videos.' }, 'Pause between downloads'),
+        h('label', { title: 'A short random wait before each download. Without it YouTube may start asking to “confirm you’re not a bot” after about a hundred videos.' }, 'Pause between downloads'),
         sel('download_pause', [[0, 'None'], [3, '3-6 s (recommended)'], [6, '6-12 s'], [10, '10-20 s']], Number),
         h('label', {}, 'Video encoder'), sel('encoder', [['auto', 'Automatic (GPU if available)'], ...meta.encoders.map(e => [e.id, e.label])]),
         h('label', {}, 'Render jobs at once'), sel('render_workers', [1, 2, 3, 4, 5, 6].map(n => [n, n]), Number),
